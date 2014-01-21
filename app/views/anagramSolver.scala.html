@@ -1,0 +1,105 @@
+@(banks: Seq[anagrams.WordBank])(implicit req: RequestHeader)
+
+@helper.javascriptRouter("anagramRoutes")(
+    routes.javascript.Anagrams.solve
+)
+
+@main("Anagram Solver", moreScripts = knockout()) {
+    <div class="row">
+        <form class="form-horizontal span5">
+            <h4>Anagram Input</h4>
+            @htmlControl("Mode"){
+                <label class="radio inline"><input type="radio" name="modeGroup" value="jumble" data-bind="checked: mode"/>Jumble</label>
+                <label class="radio inline"><input type="radio" name="modeGroup" value="scrabble" data-bind="checked: mode"/> Scrabble</label>
+            }
+            @htmlControl("Word List Source"){
+                @for(b <- banks){
+                    <label class="radio inline"><input type="radio" name="bankGroup" value="@b.name" data-bind="checked: selectedBank"/>@b.name</label><br>
+                }
+                <label class="radio inline"><input type="radio" name="bankGroup" value="custom" data-bind="checked: selectedBank"/>Custom</label><br>
+                <textarea class="span3" data-bind="value: customBank" placeholder="Custom word list"></textarea>
+            }
+            @htmlControl("# Wilds"){
+                <input type="text" data-bind="numericValue: numWild"/></td>
+            }
+            @htmlControl("Input"){
+                <input type="text" data-bind="value: input"/>
+            }
+            <button class="btn" data-bind="click: call, disable: searching">Submit</button>
+        </form>
+        <div class="span6" style="border-left: 1px solid gray; padding-left:50px">
+            <h4>Solutions</h4>
+            @htmlControl(""){
+                <textarea data-bind="value: answerList" rows="10" class="span6" placeholder="No solutions found"></textarea>
+            }
+        </div>
+    </div>
+}
+
+<script>
+function Bank(name, url){
+    var self = this;
+    self.name = ko.observable(name);
+    self.url = ko.observable(url);
+}
+
+function AnagramSolver(){
+    var self = this;
+    self.banks = ko.observableArray([]);
+    self.mode = ko.observable("jumble");
+    self.selectedBank = ko.observable("");
+    self.customBank = ko.observable("");
+    self.numWild = ko.observable(0);
+    self.answers = ko.observableArray([]);
+    self.input = ko.observable("");
+    self.url = ko.observable("");
+    self.searching = ko.observable(false);
+
+    self.answerList = ko.computed(function(){
+        return self.answers().join("\n");
+    });
+
+    self.customList = ko.computed(function(){
+        return self.customBank().split("\n");
+    });
+
+    self.selectedBank.subscribe(function(s){
+        if(s == "custom"){
+            self.url(null);
+        }else{
+            for(var i = 0; i < self.banks().length; i++){
+                if(self.banks()[i].name() == s){
+                    self.url(self.banks()[i].url());
+                }
+            }
+        }
+    });
+
+    self.call = function(){
+        self.searching(true);
+        anagramRoutes.controllers.Anagrams.solve().ajax({
+            data: ko.toJSON(self),
+            contentType: 'text/json',
+            success: function(data){
+                console.log(data);
+                self.answers(data);
+                self.searching(false);
+            },
+            error: function(data){
+                console.log(data);
+                var response = $.parseJSON(data.responseText);
+                self.searching(false);
+            }
+        });
+    }
+}
+
+var as = new AnagramSolver();
+ko.applyBindings(as);
+
+@for(b <- banks){
+    as.banks.push(new Bank('@b.name', '@b.url'));
+}
+as.selectedBank('@banks.head.name');
+
+</script>
